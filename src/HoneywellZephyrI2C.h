@@ -71,12 +71,42 @@ class ZephyrFlowRateSensor
     void begin()
     {
         delay(17); // start-up time
-        // power up sequence: first two reads are serial number
-        readSensor(); // two MSB of Sensor
-        
-        delay(10);
-        readSensor(); // 2 LSB of SN
+    
+        // power up sequence: first two reads are serial number   
+        loadSerialNumber();
     }
+
+    /**************************************************************************/
+    /*!
+    @brief  Attempts to read four byte (uint32) serial number from the sensor in
+            two separate 2-byte reads.
+
+            Note: this will only work once, and only if called immediately after powerup.
+    
+    */
+    /**************************************************************************/
+    void loadSerialNumber()
+    {
+
+        Wire.requestFrom(_ADDR, (uint8_t)2);
+
+        int8_t idx = 3;
+        while ( Wire.available() && idx > 1 ) 
+        {
+            _sn[idx] = Wire.read();
+            --idx;
+        }
+
+        delay(10);
+
+        Wire.requestFrom(_ADDR, (uint8_t)2);
+
+        while ( Wire.available() && idx >= 0 ) 
+        {
+            _sn[idx] = Wire.read();
+            --idx;
+        }
+}
 
     /**************************************************************************/
     /*!
@@ -136,9 +166,26 @@ class ZephyrFlowRateSensor
     float flow() const { return _type == SCCM ? 
                                 _FLOW_RANGE * ( ( (float)_count/16384.0) - 0.5) * 2.5 :
                                 _FLOW_RANGE * ( ( (float)_count/16384.0) - 0.1) * 1.25; }
+
+    /**************************************************************************/
+    /*!
+    @brief  Return the serial number loaded at startup.
+    
+    @return  The uint32 serial number
+    */
+    /**************************************************************************/
+    uint32_t serialNumber() const { return _serialNumber; }
+
   private:
     const uint8_t _ADDR;      ///< slave select pin (active low)
     const float _FLOW_RANGE;  ///< sensor flow rate range
+    
+    union {
+        uint8_t  _sn[4];         ///< sensor serial number
+        uint32_t _serialNumber;  ///< sensor serial number
+    };
+
+
     uint8_t _buf[2];          ///< buffer to hold sensor data
     int _count = 0;           ///< hold raw flow rate data (14- bits, 0 - 16384)
     SensorType _type;         ///< the sensor type is used to select the algorithm to convert counts to flow rate
